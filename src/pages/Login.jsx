@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Home, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { loginAdmin } from '../api';
 
 export default function Login({ onLogin }) {
     const [email, setEmail] = useState('');
@@ -9,18 +9,24 @@ export default function Login({ onLogin }) {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-        setTimeout(() => {
-            if (email === 'admin@houserental.com' && password === 'admin123') {
-                onLogin();
-            } else {
-                setError('Invalid email or password. Try admin@houserental.com / admin123');
+        try {
+            const { data } = await loginAdmin(email, password);
+            if (data.data.user.role !== 'admin') {
+                setError('Access denied. Admin accounts only.');
+                return;
             }
+            localStorage.setItem('admin_token', data.data.token);
+            onLogin(data.data.user);
+        } catch (err) {
+            const msg = err.response?.data?.error?.message || 'Invalid email or password.';
+            setError(msg);
+        } finally {
             setLoading(false);
-        }, 800);
+        }
     };
 
     return (
@@ -41,13 +47,12 @@ export default function Login({ onLogin }) {
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} className="login-form">
                     <div className="form-group">
                         <label className="form-label">Email Address</label>
                         <input
-                            id="login-email"
-                            type="email"
                             className="form-input"
+                            type="email"
                             placeholder="admin@houserental.com"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
@@ -57,42 +62,29 @@ export default function Login({ onLogin }) {
                     </div>
                     <div className="form-group">
                         <label className="form-label">Password</label>
-                        <div style={{ position: 'relative' }}>
+                        <div className="input-with-icon">
                             <input
-                                id="login-password"
-                                type={showPw ? 'text' : 'password'}
                                 className="form-input"
-                                placeholder="••••••••"
+                                type={showPw ? 'text' : 'password'}
+                                placeholder="Enter your password"
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 required
-                                style={{ paddingRight: 44 }}
                             />
                             <button
                                 type="button"
-                                onClick={() => setShowPw(!showPw)}
-                                style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+                                className="input-icon input-icon-right"
+                                onClick={() => setShowPw(p => !p)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
                             >
                                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                             </button>
                         </div>
                     </div>
-                    <span className="forgot-link" style={{ cursor: 'pointer' }}>Forgot password?</span>
-                    <button
-                        id="login-btn"
-                        type="submit"
-                        className={`btn btn-primary btn-lg`}
-                        style={{ width: '100%', justifyContent: 'center' }}
-                        disabled={loading}
-                    >
-                        {loading ? 'Signing In...' : 'Sign In'}
+                    <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
+                        {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
-
-                <div className="login-hint">
-                    <strong>Demo credentials:</strong><br />
-                    admin@houserental.com &nbsp;/&nbsp; admin123
-                </div>
             </div>
         </div>
     );

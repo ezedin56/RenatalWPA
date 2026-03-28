@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Download, CheckCircle, XCircle, Clock, CreditCard } from 'lucide-react';
 import { mockTransactions } from '../data/mockData';
+import { getTransactions } from '../api';
 
 export default function Transactions() {
-    const [txns, setTxns] = useState(mockTransactions);
+    const [txns, setTxns] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [roleFilter, setRoleFilter] = useState('all');
+
+    useEffect(() => {
+        getTransactions()
+            .then(({ data }) => setTxns(data.data || []))
+            .catch(() => setTxns(mockTransactions))
+            .finally(() => setLoading(false));
+    }, []);
 
     const filtered = txns.filter(t => {
         const matchSearch = t.userName.toLowerCase().includes(search.toLowerCase()) || t.userEmail.toLowerCase().includes(search.toLowerCase());

@@ -1,16 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Home, MapPin, BedDouble, Trash2, Eye, Flag, Filter } from 'lucide-react';
 import { mockListings } from '../data/mockData';
 import Modal from '../components/Modal';
+import { getListings, deleteListing } from '../api';
 
 export default function Listings() {
     const navigate = useNavigate();
-    const [listings, setListings] = useState(mockListings);
+    const [listings, setListings] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteModal, setDeleteModal] = useState(null);
+
+    useEffect(() => {
+        getListings()
+            .then(({ data }) => setListings(data.data || []))
+            .catch(() => setListings(mockListings))
+            .finally(() => setLoading(false));
+    }, []);
 
     const filtered = listings.filter(l => {
         const matchSearch = l.title.toLowerCase().includes(search.toLowerCase()) || l.location.toLowerCase().includes(search.toLowerCase());
@@ -19,8 +28,11 @@ export default function Listings() {
         return matchSearch && matchType && matchStatus;
     });
 
-    const handleDelete = (id) => {
-        setListings(prev => prev.filter(l => l.id !== id));
+    const handleDelete = async (id) => {
+        try {
+            await deleteListing(id);
+            setListings(prev => prev.filter(l => (l._id || l.id) !== id));
+        } catch { /* silently ignore */ }
         setDeleteModal(null);
     };
 
@@ -51,17 +63,22 @@ export default function Listings() {
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{filtered.length} listings</span>
             </div>
 
-            {filtered.length === 0 ? (
+            {loading ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading listings...</div>
+            ) : filtered.length === 0 ? (
                 <div className="card"><div className="empty-state"><Home size={40} /><h3>No listings found</h3></div></div>
             ) : (
                 <div className="listings-grid">
-                    {filtered.map(l => (
-                        <div key={l.id} className="listing-card">
+                    {filtered.map(l => {
+                        const lid = l._id || l.id;
+                        const img = l.image || l.images?.[0];
+                        return (
+                        <div key={lid} className="listing-card">
                             <div className="listing-img">
-                                {l.image
-                                    ? <img src={l.image} alt={l.title} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                                {img
+                                    ? <img src={img} alt={l.title} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
                                     : null}
-                                <div className="listing-img-placeholder" style={{ display: l.image ? 'none' : 'flex' }}><Home size={36} /></div>
+                                <div className="listing-img-placeholder" style={{ display: img ? 'none' : 'flex' }}><Home size={36} /></div>
                                 {l.isPremium && <div className="listing-badge-overlay"><span className="badge badge-warning">⭐ Premium</span></div>}
                             </div>
                             <div className="listing-card-body">
@@ -75,23 +92,24 @@ export default function Listings() {
                                 </div>
                                 <p className="listing-desc">{l.description}</p>
                                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                                    Listed by: <span style={{ fontWeight: 600 }}>{l.owner}</span> · {l.views} views · {l.inquiries} inquiries
+                                    Listed by: <span style={{ fontWeight: 600 }}>{l.owner?.name || l.owner}</span> · {l.views || 0} views · {l.inquiries || 0} inquiries
                                 </div>
                             </div>
                             <div className="listing-card-footer">
-                                <div className="listing-price">KES {l.price.toLocaleString()}<span>/mo</span></div>
+                                <div className="listing-price">KES {(l.price || 0).toLocaleString()}<span>/mo</span></div>
                                 <div style={{ display: 'flex', gap: 6 }}>
-                                    <button className="btn-icon view" title="View Details" onClick={() => navigate(`/listings/${l.id}`)}><Eye size={15} /></button>
+                                    <button className="btn-icon view" title="View Details" onClick={() => navigate(`/listings/${lid}`)}><Eye size={15} /></button>
                                     <button className="btn-icon delete" title="Delete Listing" onClick={() => setDeleteModal(l)}><Trash2 size={15} /></button>
                                 </div>
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
             <Modal isOpen={!!deleteModal} onClose={() => setDeleteModal(null)} title="Delete Listing"
-                footer={<><button className="btn btn-outline" onClick={() => setDeleteModal(null)}>Cancel</button><button className="btn btn-danger" onClick={() => handleDelete(deleteModal.id)}>Delete Listing</button></>}>
+                footer={<><button className="btn btn-outline" onClick={() => setDeleteModal(null)}>Cancel</button><button className="btn btn-danger" onClick={() => handleDelete(deleteModal._id || deleteModal.id)}>Delete Listing</button></>}>
                 <div className="alert alert-error">
                     Are you sure you want to permanently delete <strong>"{deleteModal?.title}"</strong>? The owner will be notified.
                 </div>

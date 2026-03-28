@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Eye, Trash2, Check, X, UserPlus } from 'lucide-react';
 import Modal from '../components/Modal';
 import { mockUsers } from '../data/mockData';
+import { getUsers, approveUser, suspendUser, deleteUser } from '../api';
 
 export default function Users() {
     const navigate = useNavigate();
-    const [users, setUsers] = useState(mockUsers);
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -15,6 +17,13 @@ export default function Users() {
     const [suspendDuration, setSuspendDuration] = useState('7');
     const [suspendReason, setSuspendReason] = useState('');
 
+    useEffect(() => {
+        getUsers()
+            .then(({ data }) => setUsers(data.data || []))
+            .catch(() => setUsers(mockUsers))
+            .finally(() => setLoading(false));
+    }, []);
+
     const filtered = users.filter(u => {
         const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
         const matchRole = roleFilter === 'all' || u.role === roleFilter;
@@ -22,17 +31,27 @@ export default function Users() {
         return matchSearch && matchRole && matchStatus;
     });
 
-    const handleApprove = (id) => {
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, isApproved: true, status: 'active' } : u));
+    const handleApprove = async (id) => {
+        try {
+            await approveUser(id);
+            setUsers(prev => prev.map(u => (u._id || u.id) === id ? { ...u, isApproved: true, status: 'active' } : u));
+        } catch { /* silently ignore */ }
     };
 
-    const handleDelete = (id) => {
-        setUsers(prev => prev.filter(u => u.id !== id));
+    const handleDelete = async (id) => {
+        try {
+            await deleteUser(id);
+            setUsers(prev => prev.filter(u => (u._id || u.id) !== id));
+        } catch { /* silently ignore */ }
         setDeleteModal(null);
     };
 
-    const handleSuspend = () => {
-        setUsers(prev => prev.map(u => u.id === suspendModal.id ? { ...u, status: 'suspended' } : u));
+    const handleSuspend = async () => {
+        const id = suspendModal._id || suspendModal.id;
+        try {
+            await suspendUser(id, { duration: suspendDuration, reason: suspendReason });
+            setUsers(prev => prev.map(u => (u._id || u.id) === id ? { ...u, status: 'suspended' } : u));
+        } catch { /* silently ignore */ }
         setSuspendModal(null);
     };
 
@@ -70,6 +89,9 @@ export default function Users() {
             </div>
 
             <div className="card">
+                {loading ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading users...</div>
+                ) : (
                 <div className="table-container">
                     <table>
                         <thead>
@@ -83,11 +105,15 @@ export default function Users() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map(u => (
-                                <tr key={u.id}>
+                            {filtered.map(u => {
+                                const uid = u._id || u.id;
+                                const initials = u.avatar || u.name?.slice(0, 2).toUpperCase();
+                                const color = u.avatarColor || '#2563EB';
+                                return (
+                                <tr key={uid}>
                                     <td>
                                         <div className="user-cell">
-                                            <div className="avatar" style={{ background: u.avatarColor + '20', color: u.avatarColor }}>{u.avatar}</div>
+                                            <div className="avatar" style={{ background: color + '20', color }}>{initials}</div>
                                             <div>
                                                 <div className="user-name">{u.name}</div>
                                                 <div className="user-email">{u.email}</div>
@@ -97,12 +123,12 @@ export default function Users() {
                                     </td>
                                     <td><span className={`badge badge-${u.role === 'owner' ? 'primary' : u.role === 'broker' ? 'purple' : 'gray'}`}>{u.role}</span></td>
                                     <td>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8. }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                             <span className={`badge badge-${u.status === 'active' ? 'success' : u.status === 'pending' ? 'warning' : 'error'}`}>
                                                 {u.isApproved ? '✓ ' : u.status === 'pending' ? '× ' : ''}{u.status}
                                             </span>
                                             {!u.isApproved && (u.role === 'owner' || u.role === 'broker') && (
-                                                <button className="btn-icon approve" title="Approve" onClick={() => handleApprove(u.id)}><Check size={14} /></button>
+                                                <button className="btn-icon approve" title="Approve" onClick={() => handleApprove(uid)}><Check size={14} /></button>
                                             )}
                                         </div>
                                     </td>
@@ -112,10 +138,10 @@ export default function Users() {
                                             : <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>—</span>
                                         }
                                     </td>
-                                    <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{u.joinedDate}</td>
+                                    <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{u.joinedDate || new Date(u.createdAt).toLocaleDateString()}</td>
                                     <td>
                                         <div style={{ display: 'flex', gap: 6 }}>
-                                            <button className="btn-icon view" title="View Profile" onClick={() => navigate(`/users/${u.id}`)}><Eye size={15} /></button>
+                                            <button className="btn-icon view" title="View Profile" onClick={() => navigate(`/users/${uid}`)}><Eye size={15} /></button>
                                             {u.status !== 'suspended' && (
                                                 <button className="btn-icon edit" title="Suspend" onClick={() => setSuspendModal(u)}><X size={15} /></button>
                                             )}
@@ -123,11 +149,13 @@ export default function Users() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
-                {filtered.length === 0 && (
+                )}
+                {!loading && filtered.length === 0 && (
                     <div className="empty-state"><Users size={40} /><h3>No users found</h3><p>Try adjusting your search or filters</p></div>
                 )}
             </div>
@@ -178,7 +206,7 @@ export default function Users() {
                 footer={
                     <>
                         <button className="btn btn-outline" onClick={() => setDeleteModal(null)}>Cancel</button>
-                        <button className="btn btn-danger" onClick={() => handleDelete(deleteModal.id)}>Delete Permanently</button>
+                        <button className="btn btn-danger" onClick={() => handleDelete(deleteModal._id || deleteModal.id)}>Delete Permanently</button>
                     </>
                 }
             >

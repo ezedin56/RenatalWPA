@@ -15,16 +15,17 @@ import Notifications from './pages/Notifications';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(
-    () => localStorage.getItem('admin_logged_in') === 'true'
+    () => !!(localStorage.getItem('admin_token') && localStorage.getItem('admin_logged_in') === 'true')
   );
 
-  const handleLogin = () => {
+  const handleLogin = (user) => {
     localStorage.setItem('admin_logged_in', 'true');
     setIsLoggedIn(true);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('admin_logged_in');
+    localStorage.removeItem('admin_token');
     setIsLoggedIn(false);
   };
 

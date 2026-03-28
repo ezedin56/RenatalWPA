@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users, Home, Star, DollarSign, Clock, UserCheck,
-    TrendingUp, TrendingDown, RefreshCw, Eye, CheckCircle, AlertTriangle
+    TrendingUp, TrendingDown, RefreshCw, Eye, AlertTriangle
 } from 'lucide-react';
 import {
     LineChart, Line, BarChart, Bar, AreaChart, Area,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
+import { getStats } from '../api';
 import {
     mockDashboardStats, mockActivity, mockUserGrowthData,
     mockRevenueData, mockListingsData, mockUsers, mockListings
@@ -17,16 +18,42 @@ export default function Dashboard() {
     const navigate = useNavigate();
     const [growthTab, setGrowthTab] = useState('Monthly');
     const [revTab, setRevTab] = useState('Monthly');
-    const s = mockDashboardStats;
+    const [statsData, setStatsData] = useState(null);
+    const [recentUsers, setRecentUsers] = useState([]);
+    const [recentListings, setRecentListings] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDashboard = async () => {
+            try {
+                const { data } = await getStats();
+                setStatsData(data.data);
+                setRecentUsers(data.data.recentUsers || mockUsers.slice(0, 4));
+                setRecentListings(data.data.recentListings || mockListings.slice(0, 3));
+            } catch {
+                // Fall back to mock data if API unavailable
+                setStatsData(mockDashboardStats);
+                setRecentUsers(mockUsers.slice(0, 4));
+                setRecentListings(mockListings.slice(0, 3));
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDashboard();
+    }, []);
+
+    const s = statsData || mockDashboardStats;
 
     const stats = [
-        { label: 'Total Users', value: s.totalUsers, sub: `${s.userBreakdown.owners} owners · ${s.userBreakdown.brokers} brokers · ${s.userBreakdown.renters} renters`, icon: <Users size={20} />, iconBg: '#EFF6FF', iconColor: '#2563EB', trend: '+12%', up: true },
-        { label: 'Total Listings', value: s.totalListings, sub: `${s.listingBreakdown.active} active · ${s.listingBreakdown.premium} premium`, icon: <Home size={20} />, iconBg: '#ECFDF5', iconColor: '#10B981', trend: '+8%', up: true },
-        { label: 'Premium Users', value: s.premiumUsers, sub: 'Active premium subscriptions', icon: <Star size={20} />, iconBg: '#F5F3FF', iconColor: '#7C3AED', trend: '+2', up: true },
-        { label: 'Total Revenue', value: `KES ${s.totalRevenue.toLocaleString()}`, sub: 'From premium subscriptions', icon: <DollarSign size={20} />, iconBg: '#FFFBEB', iconColor: '#F59E0B', trend: '+18%', up: true },
-        { label: 'Pending Approvals', value: s.pendingApprovals, sub: 'Owners & brokers awaiting approval', icon: <Clock size={20} />, iconBg: '#FEF2F2', iconColor: '#EF4444', trend: 'Action needed', up: false, isAlert: true },
-        { label: 'Verified Users', value: s.verifiedUsers, sub: 'Approved accounts', icon: <UserCheck size={20} />, iconBg: '#ECFDF5', iconColor: '#10B981', trend: '+4', up: true },
+        { label: 'Total Users', value: s.totalUsers ?? 0, sub: `${s.userBreakdown?.owners ?? 0} owners · ${s.userBreakdown?.brokers ?? 0} brokers · ${s.userBreakdown?.renters ?? 0} renters`, icon: <Users size={20} />, iconBg: '#EFF6FF', iconColor: '#2563EB', trend: '+12%', up: true },
+        { label: 'Total Listings', value: s.totalListings ?? 0, sub: `${s.listingBreakdown?.active ?? 0} active · ${s.listingBreakdown?.premium ?? 0} premium`, icon: <Home size={20} />, iconBg: '#ECFDF5', iconColor: '#10B981', trend: '+8%', up: true },
+        { label: 'Premium Users', value: s.premiumUsers ?? 0, sub: 'Active premium subscriptions', icon: <Star size={20} />, iconBg: '#F5F3FF', iconColor: '#7C3AED', trend: '+2', up: true },
+        { label: 'Total Revenue', value: `KES ${(s.totalRevenue ?? 0).toLocaleString()}`, sub: 'From premium subscriptions', icon: <DollarSign size={20} />, iconBg: '#FFFBEB', iconColor: '#F59E0B', trend: '+18%', up: true },
+        { label: 'Pending Approvals', value: s.pendingApprovals ?? 0, sub: 'Owners & brokers awaiting approval', icon: <Clock size={20} />, iconBg: '#FEF2F2', iconColor: '#EF4444', trend: 'Action needed', up: false, isAlert: true },
+        { label: 'Verified Users', value: s.verifiedUsers ?? 0, sub: 'Approved accounts', icon: <UserCheck size={20} />, iconBg: '#ECFDF5', iconColor: '#10B981', trend: '+4', up: true },
     ];
+
+    if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading dashboard...</div>;
 
     return (
         <div>
@@ -38,7 +65,7 @@ export default function Dashboard() {
             {/* Quick Actions */}
             <div className="quick-actions">
                 <button className="quick-action-btn" onClick={() => navigate('/users/pending')}>
-                    <Clock size={16} /> Review Pending Approvals ({s.pendingApprovals})
+                    <Clock size={16} /> Review Pending Approvals ({s.pendingApprovals ?? 0})
                 </button>
                 <button className="quick-action-btn" onClick={() => navigate('/listings')}>
                     <Eye size={16} /> View All Listings
@@ -174,11 +201,13 @@ export default function Dashboard() {
                         <table>
                             <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Joined</th></tr></thead>
                             <tbody>
-                                {mockUsers.slice(0, 4).map(u => (
-                                    <tr key={u.id}>
+                                {recentUsers.slice(0, 4).map(u => (
+                                    <tr key={u._id || u.id}>
                                         <td>
                                             <div className="user-cell">
-                                                <div className="avatar" style={{ background: u.avatarColor + '20', color: u.avatarColor }}>{u.avatar}</div>
+                                                <div className="avatar" style={{ background: (u.avatarColor || '#2563EB') + '20', color: u.avatarColor || '#2563EB' }}>
+                                                    {u.avatar || u.name?.slice(0, 2).toUpperCase()}
+                                                </div>
                                                 <div>
                                                     <div className="user-name">{u.name}</div>
                                                     <div className="user-email">{u.email}</div>
@@ -187,7 +216,7 @@ export default function Dashboard() {
                                         </td>
                                         <td><span className={`badge badge-${u.role === 'owner' ? 'primary' : u.role === 'broker' ? 'purple' : 'gray'}`}>{u.role}</span></td>
                                         <td><span className={`badge badge-${u.status === 'active' ? 'success' : u.status === 'pending' ? 'warning' : 'error'}`}>{u.status}</span></td>
-                                        <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{u.joinedDate}</td>
+                                        <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{u.joinedDate || new Date(u.createdAt).toLocaleDateString()}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -201,15 +230,17 @@ export default function Dashboard() {
                         <button className="btn btn-outline btn-sm" onClick={() => navigate('/listings')}>View All</button>
                     </div>
                     <div className="card-body" style={{ padding: '0 24px 12px' }}>
-                        {mockListings.slice(0, 3).map(l => (
-                            <div key={l.id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--border-light)' }}>
+                        {recentListings.slice(0, 3).map(l => (
+                            <div key={l._id || l.id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--border-light)' }}>
                                 <div style={{ width: 56, height: 48, borderRadius: 8, overflow: 'hidden', flexShrink: 0, background: 'var(--bg)' }}>
-                                    {l.image ? <img src={l.image} alt={l.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Home size={18} color="var(--text-muted)" /></div>}
+                                    {l.image || l.images?.[0]
+                                        ? <img src={l.image || l.images[0]} alt={l.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Home size={18} color="var(--text-muted)" /></div>}
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{l.title}</div>
                                     <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{l.location}</div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', marginTop: 3 }}>KES {l.price.toLocaleString()}/mo</div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', marginTop: 3 }}>KES {(l.price || 0).toLocaleString()}/mo</div>
                                 </div>
                                 {l.isPremium && <span className="badge badge-warning">Premium</span>}
                             </div>

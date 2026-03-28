@@ -1,24 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, Check, X, Mail, User, Phone, MapPin, Calendar } from 'lucide-react';
 import Modal from '../components/Modal';
 import { mockUsers } from '../data/mockData';
+import { getPendingUsers, approveUser, suspendUser } from '../api';
 
 export default function PendingApprovals() {
     const navigate = useNavigate();
-    const [users, setUsers] = useState(mockUsers.filter(u => !u.isApproved && (u.role === 'owner' || u.role === 'broker')));
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [rejectModal, setRejectModal] = useState(null);
     const [approveModal, setApproveModal] = useState(null);
     const [rejectReason, setRejectReason] = useState('');
     const [rejectNote, setRejectNote] = useState('');
 
-    const handleApprove = () => {
-        setUsers(prev => prev.filter(u => u.id !== approveModal.id));
+    useEffect(() => {
+        getPendingUsers()
+            .then(({ data }) => setUsers(data.data || []))
+            .catch(() => setUsers(mockUsers.filter(u => !u.isApproved && (u.role === 'owner' || u.role === 'broker'))))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const handleApprove = async () => {
+        const id = approveModal._id || approveModal.id;
+        try {
+            await approveUser(id);
+            setUsers(prev => prev.filter(u => (u._id || u.id) !== id));
+        } catch { /* silently ignore */ }
         setApproveModal(null);
     };
 
-    const handleReject = () => {
-        setUsers(prev => prev.filter(u => u.id !== rejectModal.id));
+    const handleReject = async () => {
+        const id = rejectModal._id || rejectModal.id;
+        try {
+            await suspendUser(id, { reason: rejectReason, note: rejectNote });
+            setUsers(prev => prev.filter(u => (u._id || u.id) !== id));
+        } catch { /* silently ignore */ }
         setRejectModal(null);
         setRejectReason('');
         setRejectNote('');
@@ -36,7 +53,9 @@ export default function PendingApprovals() {
                 <p>Review and approve owner and broker registrations</p>
             </div>
 
-            {users.length === 0 ? (
+            {loading ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading pending approvals...</div>
+            ) : users.length === 0 ? (
                 <div className="card">
                     <div className="empty-state">
                         <Check size={48} color="var(--success)" />
@@ -52,11 +71,14 @@ export default function PendingApprovals() {
                     </div>
                     <div className="approval-grid">
                         {users.map(u => {
-                            const days = daysSince(u.joinedDate);
+                            const uid = u._id || u.id;
+                            const days = daysSince(u.joinedDate || u.createdAt);
+                            const initials = u.avatar || u.name?.slice(0, 2).toUpperCase();
+                            const color = u.avatarColor || '#2563EB';
                             return (
-                                <div key={u.id} className={`approval-card ${days > 3 ? 'priority-high' : ''}`}>
+                                <div key={uid} className={`approval-card ${days > 3 ? 'priority-high' : ''}`}>
                                     <div className="approval-card-header">
-                                        <div className="approval-avatar" style={{ color: u.avatarColor }}>{u.avatar}</div>
+                                        <div className="approval-avatar" style={{ color }}>{initials}</div>
                                         <div>
                                             <div style={{ fontWeight: 700, fontSize: 16 }}>{u.name}</div>
                                             <span className={`badge badge-${u.role === 'owner' ? 'primary' : 'purple'}`} style={{ marginTop: 4 }}>{u.role}</span>
@@ -79,7 +101,7 @@ export default function PendingApprovals() {
                                             </div>
                                             <div className="approval-field">
                                                 <label><Calendar size={11} style={{ display: 'inline' }} /> Registered</label>
-                                                <p>{u.joinedDate}</p>
+                                                <p>{u.joinedDate || new Date(u.createdAt).toLocaleDateString()}</p>
                                             </div>
                                         </div>
                                         <div className="approval-actions">
@@ -89,7 +111,7 @@ export default function PendingApprovals() {
                                             <button className="btn btn-danger" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setRejectModal(u)}>
                                                 <X size={15} /> Reject
                                             </button>
-                                            <button className="btn btn-outline btn-sm" onClick={() => navigate(`/users/${u.id}`)}>
+                                            <button className="btn btn-outline btn-sm" onClick={() => navigate(`/users/${uid}`)}>
                                                 <User size={14} />
                                             </button>
                                         </div>
