@@ -10,6 +10,8 @@ const transactionSchema = new mongoose.Schema({
     mpesaPhone: { type: String },
     reference: { type: String, unique: true, default: () => `TXN-${uuidv4().substring(0, 8).toUpperCase()}` },
     receiptNumber: { type: String },
+    checkoutRequestId: { type: String },   // from STK Push response
+    merchantRequestId: { type: String },   // from STK Push response
     failureReason: { type: String },
 }, { timestamps: true });
 

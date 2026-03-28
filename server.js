@@ -3,8 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const path = require('path');
 const connectDB = require('./src/config/db');
 const errorHandler = require('./src/middleware/errorHandler');
+const upload = require('./src/middleware/upload');
+const { protect } = require('./src/middleware/auth');
 
 // Route files
 const authRoutes = require('./src/routes/auth');
@@ -20,8 +23,8 @@ connectDB();
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// Security middleware — allow images to be served
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // CORS — allow admin dashboard and mobile origins
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5174').split(',');
@@ -37,6 +40,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve uploaded images as static files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Logging
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
@@ -51,13 +57,24 @@ app.get('/api/v1/health', (req, res) => {
     });
 });
 
+// ── Image upload endpoint ────────────────────────────────────────────────────
+// POST /api/v1/upload/images  (multipart/form-data, field: "images", max 10)
+app.post('/api/v1/upload/images', protect, upload.array('images', 10), (req, res) => {
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ success: false, error: { message: 'No images uploaded' } });
+    }
+    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const urls = req.files.map(f => `${baseUrl}/uploads/${f.filename}`);
+    res.status(201).json({ success: true, data: { urls } });
+});
+
 // Mount routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/houses', houseRoutes);
 app.use('/api/v1/inquiries', inquiryRoutes);
 app.use('/api/v1/favorites', favoriteRoutes);
-app.use('/api/v1', paymentRoutes);   // payment routes include /premium/* and /payment/*
+app.use('/api/v1', paymentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
 // 404 handler
