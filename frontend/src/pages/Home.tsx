@@ -43,11 +43,9 @@ const Home: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-textPrimary">
-            {isAuthenticated ? `Good ${getGreeting()}, ${user?.fullName.split(' ')[0]} 👋` : 'Find Your Dream Home 🏠'}
+            {isAuthenticated ? `Good ${getGreeting()}, ${user?.fullName.split(' ')[0]} 👋` : 'Find Your Dream Home'}
           </h2>
           <div className="flex items-center text-textSecondary mt-1 text-sm">
-            <MapPin className="h-4 w-4 mr-1 text-primary" />
-            <span>Nairobi, Kenya</span>
           </div>
         </div>
         <div className="relative cursor-pointer hover:bg-surface p-2 rounded-full transition">
