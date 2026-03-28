@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/models/listing_model.dart';
 import 'package:rental_app/features/renter/application/providers/inquiry_provider.dart';
@@ -66,13 +67,33 @@ class HouseDetailsScreen extends ConsumerWidget {
                   const Divider(height: 48),
                   const Text('Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  Container(
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 200,
+                      child: GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: LatLng(
+                            listing.latitude ?? 9.0054,
+                            listing.longitude ?? 38.7636,
+                          ),
+                          zoom: 15,
+                        ),
+                        markers: {
+                          Marker(
+                            markerId: const MarkerId('listing'),
+                            position: LatLng(
+                              listing.latitude ?? 9.0054,
+                              listing.longitude ?? 38.7636,
+                            ),
+                            infoWindow: InfoWindow(title: listing.title),
+                          ),
+                        },
+                        zoomControlsEnabled: false,
+                        myLocationButtonEnabled: false,
+                        liteModeEnabled: true,
+                      ),
                     ),
-                    child: const Center(child: Text('Map View Placeholder', style: TextStyle(color: AppColors.textSecondary))),
                   ),
                   const SizedBox(height: 100), // Padding for sticky button
                 ],

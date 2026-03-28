@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import '../../domain/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
 
@@ -30,22 +31,22 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> _checkToken() async {
     final token = await _repository.getToken();
     if (token != null) {
-      state = state.copyWith(user: UserModel(id: '1', name: 'Cached User', email: 'test@test.com', role: 'Renter'));
+      final user = await _repository.getMe();
+      if (user != null) {
+        state = state.copyWith(user: user);
+      }
     }
   }
 
   Future<bool> login(String email, String password) async {
-    print('DEBUG: AuthNotifier.login called for $email');
     state = state.copyWith(isLoading: true, error: null);
     try {
       final user = await _repository.login(email, password);
-      print('DEBUG: AuthRepository.login success for ${user.email}');
       state = state.copyWith(isLoading: false, user: user);
       return true;
-    } catch (e, stack) {
-      print('DEBUG: AuthNotifier.login catch error: $e');
-      print('DEBUG: Stack trace: $stack');
-      state = state.copyWith(isLoading: false, error: e.toString());
+    } catch (e) {
+      final msg = _parseError(e);
+      state = state.copyWith(isLoading: false, error: msg);
       return false;
     }
   }
@@ -57,9 +58,19 @@ class AuthNotifier extends Notifier<AuthState> {
       state = state.copyWith(isLoading: false, user: user);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      final msg = _parseError(e);
+      state = state.copyWith(isLoading: false, error: msg);
       return false;
     }
+  }
+
+  String _parseError(Object e) {
+    if (e is DioException) {
+      return e.response?.data?['error']?['message'] as String? ??
+          e.message ??
+          'Something went wrong';
+    }
+    return e.toString();
   }
 
   Future<void> logout() async {

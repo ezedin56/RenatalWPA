@@ -23,11 +23,12 @@ import '../../features/owner/presentation/screens/owner_inquiries_screen.dart';
 import '../../features/broker/presentation/screens/broker_dashboard_screen.dart';
 import '../../shared/widgets/scaffold_with_nav_bar.dart';
 
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
-final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
 
 final goRouterProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  ref.keepAlive(); // prevent GoRouter from being disposed and recreated
+  final router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
     routes: [
@@ -135,4 +136,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  ref.onDispose(router.dispose);
+  return router;
 });
